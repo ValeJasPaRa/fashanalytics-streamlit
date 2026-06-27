@@ -236,7 +236,7 @@ div[role="radiogroup"] label,div[role="radiogroup"] label span,div[role="radio"]
     border-radius:12px;
     padding:.55rem .9rem;
     font-size:.78rem;
-    color:#456b32;
+    color: #456b32;
     display:flex;
     align-items:center;
     gap:8px;
@@ -940,19 +940,24 @@ def build_prompt(pregunta: str, df: pd.DataFrame,
     pred_txt = f"{pred:.0f} unidades" if pred else "Aún no generada"
 
     return f"""
-Eres AsistTextil, asistente comercial de FashAnalytics.
-Hablas con el dueño o gerente de una pequeña empresa textil de Gamarra, Lima.
+Eres AsistTextil, asistente inteligente de FashAnalytics para MYPEs textiles de Gamarra, Lima.
+Eres amigable, directo y hablas como un asesor de confianza, no como un robot.
 
 TU ROL:
-- Ayudarlo a entender sus ventas y predicciones en palabras simples.
-- Recomendarle qué hacer con su stock, qué producir o qué comprar.
+- Analizar los datos reales de ventas, inventario y predicciones del usuario.
+- Dar recomendaciones concretas y accionables basadas en esos datos.
+- Responder preguntas específicas sobre productos, stock, canales y predicciones.
 
-REGLAS:
-1. Responde SOLO con los datos que tienes abajo.
-2. Si preguntan por un producto que NO está en la lista, di: "No tengo registros de ese producto."
-3. Cuando el usuario pregunte por stock, usa los datos del INVENTARIO ACTUAL.
-4. Siempre termina con UNA recomendación concreta.
-5. Responde en español simple. Máximo 3 párrafos cortos.
+REGLAS ESTRICTAS:
+1. USA SOLO los datos que tienes abajo. No inventes cifras.
+2. Si preguntan por un producto que NO aparece en la lista, di exactamente: "No tengo registros de ese producto en tu sistema."
+3. Para preguntas de stock, usa SIEMPRE el INVENTARIO ACTUAL, no las ventas.
+4. Si el usuario saluda o hace small talk, responde amigablemente y pregunta en qué puedes ayudar.
+5. Termina SIEMPRE con una recomendación concreta de 1 sola acción.
+6. Máximo 3 párrafos. Español simple y directo.
+7. Si te preguntan algo fuera del negocio textil, redirige amablemente.
+7. Si te preguntan algo fuera del negocio textil, redirige amablemente.
+8. Puedes ayudar al usuario con temas relacionados a sus ventas, sus predicciones, su inventario, y también guiarlo en el uso del sistema FashAnalytics si te preguntan cómo hacer algo en la app.
 
 --- TUS VENTAS REGISTRADAS ---
 Período          : {periodo}
@@ -1056,7 +1061,7 @@ def login_view():
   </div>
   <h1>Predicción de demanda para MYPEs textiles</h1>
   <p>Plataforma de analítica predictiva para pequeñas empresas del sector textil de Gamarra, Lima.</p>
-  <div class="security-note" style="margin-top:1.4rem;">
+  <div class="security-note" style="margin-top:1.4rem;color:#fff8ea;background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.25);">
     🔒 Tus datos solo los ves tú — nadie más puede acceder a tu información
   </div>
 </div>""", unsafe_allow_html=True)
@@ -1254,7 +1259,7 @@ def login_view():
                                 })
                             if res_u["ok"]:
                                 st.success("✅ ¡Cuenta creada! Ya puedes iniciar sesión.")
-                           
+                                st.balloons()
                                 st.session_state.reg_empresa_id     = 0
                                 st.session_state.reg_empresa_nombre = ""
                                 st.session_state.reg_paso = 1
@@ -1596,14 +1601,7 @@ def page_dashboard():
         st.plotly_chart(fig6, use_container_width=True)
 
     if inv_lista and "fecha_dt" in df.columns and df["fecha_dt"].notna().any():
-        st.markdown('<div class="section-title">📦 Stock real vs ventas mensuales</div>',
-                    unsafe_allow_html=True)
-        st.markdown('<div class="section-note">'
-                    'Compara cuántas unidades tienes <strong>HOY en tu almacén</strong> (barra marrón) '
-                    'contra cuánto vendes en promedio por mes (barra dorada). '
-                    'Si la barra dorada es mayor que la marrón, <strong>te vas a quedar sin stock este mes</strong>. '
-                    'Usa esto para decidir cuánto reponer antes de la próxima campaña.'
-                    '</div>', unsafe_allow_html=True)
+
 
         df_inv_dash = pd.DataFrame(inv_lista)
         if not df_inv_dash.empty and "producto" in df_inv_dash.columns:
@@ -1623,7 +1621,7 @@ def page_dashboard():
 
             top_rot = df_merge.sort_values("promedio_mensual", ascending=False).head(10)
 
-            # Solo productos con stock > 0 Y ventas registradas — calcular ANTES de columnas
+            # Calcular ANTES de columnas
             con_stock = df_merge[
                 (df_merge["promedio_mensual"] > 0) &
                 (df_merge["stock_actual"] > 0)
@@ -1634,17 +1632,16 @@ def page_dashboard():
                 (df_merge["stock_actual"] <= 0)
             ]
 
-            # Aviso FUERA de columnas para no romper el layout
-            if not sin_stock.empty:
-                prods_sin = ", ".join(sin_stock["producto"].tolist()[:5])
-                st.warning(
-                    f"⚠️ **{len(sin_stock)} producto(s) sin stock registrado** — "
-                    f"no aparecen en días de cobertura: {prods_sin}. "
-                    f"Ve a **Inventario → Registrar entrada** para actualizarlos."
-                )
-
             ce, cf = st.columns(2)
             with ce:
+                st.markdown('<div class="section-title">📦 Stock real vs ventas mensuales</div>',
+                unsafe_allow_html=True)
+                st.markdown('<div class="section-note">'
+                'Compara cuántas unidades tienes <strong>HOY en tu almacén</strong> (barra marrón) '
+                'contra cuánto vendes en promedio por mes (barra dorada). '
+                'Si la barra dorada es mayor que la marrón, <strong>te vas a quedar sin stock este mes</strong>. '
+                'Usa esto para decidir cuánto reponer antes de la próxima campaña.'
+                '</div>', unsafe_allow_html=True)
                 fig7 = go.Figure()
                 fig7.add_trace(go.Bar(
                     x=top_rot["producto"], y=top_rot["stock_actual"],
@@ -1659,6 +1656,7 @@ def page_dashboard():
                     text=top_rot["promedio_mensual"].astype(int),
                     textposition="outside"))
                 chart_style(fig7, "", 360)
+                fig7.update_layout(xaxis=dict(tickangle=-45))
                 fig7.update_xaxes(title_text="Producto", tickangle=-30)
                 fig7.update_yaxes(title_text="Unidades")
                 fig7.update_layout(barmode="group")
@@ -1692,6 +1690,15 @@ def page_dashboard():
                     fig8.update_xaxes(title_text="Días de cobertura", range=[0, 70])
                     fig8.update_layout(showlegend=False)
                     st.plotly_chart(fig8, use_container_width=True)
+
+            # Warning DESPUÉS de los gráficos para no romper el layout visual
+            if not sin_stock.empty:
+                prods_sin = ", ".join(sin_stock["producto"].tolist()[:5])
+                st.warning(
+                    f"⚠️ **{len(sin_stock)} producto(s) sin stock registrado** — "
+                    f"no aparecen en días de cobertura: {prods_sin}. "
+                    f"Ve a **Inventario → Registrar entrada** para actualizarlos."
+                )
 
 
 # =============================================================================
@@ -1831,7 +1838,7 @@ def _form_campos_venta(prefix: str, opciones: dict, df_ventas: pd.DataFrame = No
         f_pct = 0.0
         if f_dscto:
             f_pct = st.number_input("% de descuento que diste",
-                                     1.0, 80.0, 10.0, 5.0, key=f"{prefix}_pct")
+                                     1.0, 100.0, 10.0, 5.0, key=f"{prefix}_pct")
     with c5:
         f_camp = st.checkbox("¿Fue durante una campaña? (Madre, Navidad, etc.)",
                               key=f"{prefix}_camp")
@@ -1926,10 +1933,10 @@ def _guardar_venta_completa(datos: dict) -> bool:
 
         nuevo_stock = res_desc.get("data", {}).get("stock_actual", "?")
         st.success(f"✅ Venta registrada. Stock restante de '{datos['producto']}': **{nuevo_stock} uds**")
-      
+        st.balloons()
     else:
         st.success("✅ Venta registrada (sin descuento de stock — producto fuera del inventario).")
-   
+        st.balloons()
 
     return True
 
@@ -2015,7 +2022,7 @@ def page_gestion_comercial():
                                           archivo.name.replace(".xlsx",".csv"))
                                 if res["ok"]:
                                     st.success(f"✅ {res['mensaje']}")
-                                  
+                                    st.balloons()
                                 else:
                                     st.error(f"❌ {res['mensaje']}")
             except Exception as e:
@@ -2580,7 +2587,7 @@ def page_inventario():
                             })
                             if res["ok"]:
                                 st.success(f"✅ '{n_nombre}' agregado al inventario.")
-                            
+                                st.balloons()
                                 time.sleep(1.5)
                                 st.rerun()
                             else:
@@ -2709,6 +2716,7 @@ def page_inventario():
                         )
                     if res_ent["ok"]:
                         st.success(f"✅ Entrada registrada. '{sel_ent['producto']}' ahora tiene **{int(sel_ent['stock_actual']) + int(e_cant)} uds**.")
+                        st.balloons()
                         time.sleep(2)
                         st.rerun()
                     else:
@@ -2904,7 +2912,8 @@ def _bloque_historial_predicciones():
     st.markdown('<div class="section-title">📜 Historial de predicciones</div>',
                 unsafe_allow_html=True)
     st.markdown('<div class="section-note">'
-                'Predicciones generadas por tu empresa. Filtra por mes, categoría o producto.'
+                'Predicciones generadas por tu empresa. Filtra por mes, categoría o producto. '
+                'Presiona <strong>Ver detalle</strong> para ver todas las condiciones con que se hizo cada predicción.'
                 '</div>', unsafe_allow_html=True)
 
     with st.spinner("Cargando historial..."):
@@ -2917,7 +2926,6 @@ def _bloque_historial_predicciones():
 
     df_preds = pd.DataFrame(preds)
     f1, f2, f3 = st.columns(3)
-
     with f1:
         if "created_at_prediccion" in df_preds.columns:
             df_preds["mes_pred"] = pd.to_datetime(
@@ -2927,17 +2935,11 @@ def _bloque_historial_predicciones():
         else:
             sel_mes = "Todos"
     with f2:
-        if "categoria" in df_preds.columns:
-            cats = ["Todas"] + sorted(df_preds["categoria"].dropna().unique().tolist())
-            sel_cat = st.selectbox("Categoría", cats, key="hp_cat")
-        else:
-            sel_cat = "Todas"
+        cats = ["Todas"] + sorted(df_preds["categoria"].dropna().unique().tolist()) if "categoria" in df_preds.columns else ["Todas"]
+        sel_cat = st.selectbox("Categoría", cats, key="hp_cat")
     with f3:
-        if "producto" in df_preds.columns:
-            prods = ["Todos"] + sorted(df_preds["producto"].dropna().unique().tolist())
-            sel_prod = st.selectbox("Producto", prods, key="hp_prod")
-        else:
-            sel_prod = "Todos"
+        prods = ["Todos"] + sorted(df_preds["producto"].dropna().unique().tolist()) if "producto" in df_preds.columns else ["Todos"]
+        sel_prod = st.selectbox("Producto", prods, key="hp_prod")
 
     df_f = df_preds.copy()
     if sel_mes  != "Todos" and "mes_pred" in df_f.columns:
@@ -2954,16 +2956,26 @@ def _bloque_historial_predicciones():
     st.caption(f"{len(df_f)} predicción(es) encontrada(s)")
 
     for _, p in df_f.iterrows():
-        pid        = p.get("id_prediccion",       "--")
-        fecha_gen  = str(p.get("created_at_prediccion","--"))[:10]
-        fecha_proy = str(p.get("fecha_proyectada","--"))
-        producto_p = p.get("producto",            "--")
-        categoria_p= p.get("categoria",           "--")
-        cantidad_p = float(p.get("cantidad_predicha", 0))
-        stock_p    = float(p.get("stock_recomendado",  0))
-        confianza_p= float(p.get("confianza",          0))
-        estado_p   = p.get("estado_predic",       "--")
-        color_e    = "#5d8c45" if estado_p == "generado" else "#b7791f"
+        pid         = p.get("id_prediccion",         "--")
+        fecha_gen   = str(p.get("created_at_prediccion","--"))[:10]
+        fecha_proy  = str(p.get("fecha_proyectada",  "--"))
+        producto_p  = p.get("producto",              "--")
+        categoria_p = p.get("categoria",             "--")
+        cantidad_p  = float(p.get("cantidad_predicha",  0))
+        stock_p     = float(p.get("stock_recomendado",  0))
+        confianza_p = float(p.get("confianza",          0))
+        estado_p    = p.get("estado_predic",         "--")
+        # condiciones de la predicción
+        precio_p    = float(p.get("precio_unitario",    0))
+        canal_p     = p.get("canal_venta",           "--")
+        cliente_p   = p.get("tipo_cliente",          "--")
+        region_p    = p.get("region_venta",          "--")
+        dscto_p     = bool(p.get("tiene_dscto",      False))
+        pct_p       = float(p.get("porcentaje_dscto",   0))
+        camp_p      = bool(p.get("es_campain",        False))
+        tipo_camp_p = p.get("tipo_campain",          "Ninguna")
+        stock_ini_p = int(p.get("stock_inicial",        0))
+        color_e     = "#5d8c45" if estado_p == "generado" else "#b7791f"
 
         col_info, col_det, col_del = st.columns([5, 1, 1])
         with col_info:
@@ -2973,7 +2985,7 @@ def _bloque_historial_predicciones():
     <div class="hr-prod">#{pid} · {producto_p} — {categoria_p}</div>
     <div class="hr-fecha">
       Generada: {fecha_gen} · Para el período: {fecha_proy} ·
-      Demanda estimada: {cantidad_p:.0f} uds
+      Demanda estimada: {cantidad_p:.0f} uds · Precio: S/. {precio_p:.2f}
     </div>
   </div>
   <div style="color:{color_e};font-weight:800;">{estado_p}</div>
@@ -3013,16 +3025,93 @@ def _bloque_historial_predicciones():
                         st.session_state[f"confirmar_pred_{pid}"] = False
                         st.rerun()
 
+        # DETALLE COMPLETO — todas las condiciones
         if st.session_state.get(f"show_{pid}", False):
-            st.markdown(
-                '<div style="background:#fffdf8;border:1px solid #e5d4b8;'
-                'border-radius:16px;padding:1.2rem;margin-bottom:1rem;">',
+            st.markdown("""
+<div style="background:#fffdf8;border:1px solid #e5d4b8;
+            border-radius:16px;padding:1.4rem 1.6rem;margin-bottom:1rem;">""",
                 unsafe_allow_html=True)
+
+            st.markdown('<div class="section-title" style="margin-top:0;">📊 Resultado de la predicción</div>',
+                        unsafe_allow_html=True)
             r1, r2, r3 = st.columns(3)
-            with r1: kpi("Demanda estimada",  f"{cantidad_p:.0f} uds",    "cantidad predicha")
-            with r2: kpi("Stock sugerido",    f"{stock_p:.0f} uds",       "+15% margen seguridad")
-            with r3: kpi("Confianza",         f"{confianza_p*100:.0f}%",  "R² del modelo = 0.928")
-            st.markdown('</div>', unsafe_allow_html=True)
+            with r1: kpi("Demanda estimada",  f"{cantidad_p:.0f} uds",   "cantidad predicha")
+            with r2: kpi("Stock sugerido",    f"{stock_p:.0f} uds",      "+15% margen seguridad")
+            with r3: kpi("Confianza modelo",  f"{confianza_p*100:.0f}%", "R² = 0.928")
+
+            st.markdown('<div class="section-title">🔧 Condiciones con que se calculó</div>',
+                        unsafe_allow_html=True)
+            st.markdown('<div class="section-note">Estos son exactamente los datos que ingresaste cuando hiciste esta predicción.</div>',
+                        unsafe_allow_html=True)
+
+            d1, d2, d3, d4 = st.columns(4)
+            with d1:
+                st.markdown(f"""
+<div style="background:#f7f1e7;border:1px solid #e5d4b8;border-radius:14px;padding:.9rem 1rem;margin-bottom:.6rem;">
+  <div style="font-size:.72rem;color:#7b6a57;font-weight:800;text-transform:uppercase;">Producto</div>
+  <div style="font-weight:900;color:#3b271b;margin-top:.3rem;">{producto_p}</div>
+</div>
+<div style="background:#f7f1e7;border:1px solid #e5d4b8;border-radius:14px;padding:.9rem 1rem;">
+  <div style="font-size:.72rem;color:#7b6a57;font-weight:800;text-transform:uppercase;">Categoría</div>
+  <div style="font-weight:900;color:#3b271b;margin-top:.3rem;">{categoria_p}</div>
+</div>""", unsafe_allow_html=True)
+            with d2:
+                st.markdown(f"""
+<div style="background:#f7f1e7;border:1px solid #e5d4b8;border-radius:14px;padding:.9rem 1rem;margin-bottom:.6rem;">
+  <div style="font-size:.72rem;color:#7b6a57;font-weight:800;text-transform:uppercase;">Fecha proyectada</div>
+  <div style="font-weight:900;color:#3b271b;margin-top:.3rem;">{fecha_proy}</div>
+</div>
+<div style="background:#f7f1e7;border:1px solid #e5d4b8;border-radius:14px;padding:.9rem 1rem;">
+  <div style="font-size:.72rem;color:#7b6a57;font-weight:800;text-transform:uppercase;">Precio unitario</div>
+  <div style="font-weight:900;color:#3b271b;margin-top:.3rem;">S/. {precio_p:.2f}</div>
+</div>""", unsafe_allow_html=True)
+            with d3:
+                st.markdown(f"""
+<div style="background:#f7f1e7;border:1px solid #e5d4b8;border-radius:14px;padding:.9rem 1rem;margin-bottom:.6rem;">
+  <div style="font-size:.72rem;color:#7b6a57;font-weight:800;text-transform:uppercase;">Canal de venta</div>
+  <div style="font-weight:900;color:#3b271b;margin-top:.3rem;">{canal_p}</div>
+</div>
+<div style="background:#f7f1e7;border:1px solid #e5d4b8;border-radius:14px;padding:.9rem 1rem;">
+  <div style="font-size:.72rem;color:#7b6a57;font-weight:800;text-transform:uppercase;">Tipo de cliente</div>
+  <div style="font-weight:900;color:#3b271b;margin-top:.3rem;">{cliente_p}</div>
+</div>""", unsafe_allow_html=True)
+            with d4:
+                st.markdown(f"""
+<div style="background:#f7f1e7;border:1px solid #e5d4b8;border-radius:14px;padding:.9rem 1rem;margin-bottom:.6rem;">
+  <div style="font-size:.72rem;color:#7b6a57;font-weight:800;text-transform:uppercase;">Región</div>
+  <div style="font-weight:900;color:#3b271b;margin-top:.3rem;">{region_p}</div>
+</div>
+<div style="background:#f7f1e7;border:1px solid #e5d4b8;border-radius:14px;padding:.9rem 1rem;">
+  <div style="font-size:.72rem;color:#7b6a57;font-weight:800;text-transform:uppercase;">Stock inicial</div>
+  <div style="font-weight:900;color:#3b271b;margin-top:.3rem;">{stock_ini_p} uds</div>
+</div>""", unsafe_allow_html=True)
+
+            st.markdown("<div style='margin-top:.8rem;'></div>", unsafe_allow_html=True)
+            e1, e2, e3 = st.columns(3)
+            dscto_txt = f"Sí — {pct_p:.0f}% de descuento" if dscto_p else "No"
+            camp_txt  = f"Sí — {tipo_camp_p}" if camp_p else "No"
+            with e1:
+                color_d = "#5d8c45" if dscto_p else "#7b6a57"
+                st.markdown(f"""
+<div style="background:#f7f1e7;border:1px solid #e5d4b8;border-radius:14px;padding:.9rem 1rem;">
+  <div style="font-size:.72rem;color:#7b6a57;font-weight:800;text-transform:uppercase;">¿Hubo descuento?</div>
+  <div style="font-weight:900;color:{color_d};margin-top:.3rem;">{dscto_txt}</div>
+</div>""", unsafe_allow_html=True)
+            with e2:
+                color_c = "#c9953b" if camp_p else "#7b6a57"
+                st.markdown(f"""
+<div style="background:#f7f1e7;border:1px solid #e5d4b8;border-radius:14px;padding:.9rem 1rem;">
+  <div style="font-size:.72rem;color:#7b6a57;font-weight:800;text-transform:uppercase;">¿Hubo campaña?</div>
+  <div style="font-weight:900;color:{color_c};margin-top:.3rem;">{camp_txt}</div>
+</div>""", unsafe_allow_html=True)
+            with e3:
+                st.markdown(f"""
+<div style="background:#f7f1e7;border:1px solid #e5d4b8;border-radius:14px;padding:.9rem 1rem;">
+  <div style="font-size:.72rem;color:#7b6a57;font-weight:800;text-transform:uppercase;">Generada el</div>
+  <div style="font-weight:900;color:#3b271b;margin-top:.3rem;">{fecha_gen}</div>
+</div>""", unsafe_allow_html=True)
+
+            st.markdown("</div>", unsafe_allow_html=True)
         st.markdown("")
 
 
@@ -3039,90 +3128,445 @@ def page_prediccion():
 
     opciones = get_opciones()
 
-    st.markdown('<div class="section-note">'
-                'Completa los datos del período que quieres proyectar. '
-                'El sistema calcula la predicción en segundos.'
-                '</div>', unsafe_allow_html=True)
+    tab_calc, tab_whatif, tab_comp = st.tabs([
+        "🎯 Calcular predicción",
+        "🔬 Simulador What-If",
+        "📊 Comparar predicciones",
+    ])
 
-    paso_header(1, "¿Para qué producto y cuándo?", "Producto, categoría y fecha")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        f_fecha = st.date_input("📅 Fecha a proyectar", value=date.today(), key="p_fecha")
-        f_prod  = (st.selectbox("🧵 Producto", opciones["productos"], key="p_prod") if opciones["productos"]
-                   else st.text_input("🧵 Producto", key="p_prod"))
-        f_cat   = (st.selectbox("📂 Categoría", opciones["categorias"], key="p_cat") if opciones["categorias"]
-                   else st.text_input("📂 Categoría", key="p_cat"))
-    with c2:
-        f_precio = st.number_input("💰 Precio unitario (S/.)", min_value=0.01,
-                                    value=25.0, step=0.5, key="p_precio")
-        f_canal  = st.selectbox("🚀 Canal de venta", opciones["canales"], key="p_canal")
-        f_cli    = st.selectbox("👤 Tipo de cliente", opciones["clientes"], key="p_cli")
-    with c3:
-        f_region = st.selectbox("📍 Región", opciones["regiones"], key="p_region")
-        f_stock  = st.number_input("📦 Stock inicial disponible", min_value=0,
-                                    value=100, step=10, key="p_stock")
+    # ── TAB 1: CALCULAR PREDICCIÓN ────────────────────────────────────────
+    with tab_calc:
+        st.markdown('<div class="section-note">'
+                    'Completa los datos del período que quieres proyectar. '
+                    'El sistema calcula la predicción en segundos.'
+                    '</div>', unsafe_allow_html=True)
 
-    st.markdown("---")
-    paso_header(2, "¿Habrá descuento o campaña?", "Opcional — pero mejora la predicción")
-    c4, c5 = st.columns(2)
-    with c4:
-        f_dscto = st.checkbox("¿Planeas hacer descuento?", key="p_dscto")
-        f_pct   = st.number_input("% de descuento", 0.0, 80.0, 0.0, 5.0,
-                                   key="p_pct") if f_dscto else 0.0
-    with c5:
-        f_camp = st.checkbox("¿Cae en campaña?", key="p_camp")
-        f_tipo_camp = "Ninguna"
-        if f_camp and opciones["campains"]:
-            f_tipo_camp = st.selectbox("¿Qué campaña?", opciones["campains"], key="p_tipo_camp")
-
-    st.markdown("---")
-    if st.button("🔮 Calcular mi predicción →", type="primary",
-                  use_container_width=True, key="p_generar"):
-        datos = {
-            "fecha": str(f_fecha), "producto": str(f_prod), "categoria": str(f_cat),
-            "precio_unitario": float(f_precio), "canal_venta": str(f_canal),
-            "tipo_cliente": str(f_cli), "region_venta": str(f_region),
-            "stock_inicial_periodo": int(f_stock), "tiene_dscto": bool(f_dscto),
-            "porcentaje_dscto": float(f_pct), "es_campain": bool(f_camp),
-            "tipo_campain": str(f_tipo_camp),
-        }
-        with st.spinner("Calculando tu predicción..."):
-            pred = predecir_demanda(datos)
-        st.session_state.pred_resultado = pred
-        st.session_state.pred_contexto  = datos
-        with st.spinner("Guardando resultado..."):
-            api_post_prediccion(pred, datos)
-        st.success("✅ ¡Predicción generada y guardada!")
-        st.rerun()
-
-    pred = st.session_state.get("pred_resultado")
-    if pred:
-        ctx = st.session_state.get("pred_contexto", {})
-        c1, c2, c3 = st.columns([2,1,1])
+        paso_header(1, "¿Para qué producto y cuándo?", "Producto, categoría y fecha")
+        c1, c2, c3 = st.columns(3)
         with c1:
-            st.markdown(f"""
+            f_fecha = st.date_input("📅 Fecha a proyectar", value=date.today(), key="p_fecha")
+            f_prod  = (st.selectbox("🧵 Producto", opciones["productos"], key="p_prod") if opciones["productos"]
+                       else st.text_input("🧵 Producto", key="p_prod"))
+            f_cat   = (st.selectbox("📂 Categoría", opciones["categorias"], key="p_cat") if opciones["categorias"]
+                       else st.text_input("📂 Categoría", key="p_cat"))
+        with c2:
+            f_precio = st.number_input("💰 Precio unitario (S/.)", min_value=0.01,
+                                        value=25.0, step=0.5, key="p_precio")
+            f_canal  = st.selectbox("🚀 Canal de venta", opciones["canales"], key="p_canal")
+            f_cli    = st.selectbox("👤 Tipo de cliente", opciones["clientes"], key="p_cli")
+        with c3:
+            f_region = st.selectbox("📍 Región", opciones["regiones"], key="p_region")
+            f_stock  = st.number_input("📦 Stock inicial disponible", min_value=0,
+                                        value=100, step=10, key="p_stock")
+
+        st.markdown("---")
+        paso_header(2, "¿Habrá descuento o campaña?", "Opcional — pero mejora la predicción")
+        c4, c5 = st.columns(2)
+        with c4:
+            f_dscto = st.checkbox("¿Planeas hacer descuento?", key="p_dscto")
+            f_pct   = st.number_input("% de descuento", 0.0, 80.0, 0.0, 5.0,
+                                       key="p_pct") if f_dscto else 0.0
+        with c5:
+            f_camp = st.checkbox("¿Cae en campaña?", key="p_camp")
+            f_tipo_camp = "Ninguna"
+            if f_camp and opciones["campains"]:
+                f_tipo_camp = st.selectbox("¿Qué campaña?", opciones["campains"], key="p_tipo_camp")
+
+        st.markdown("---")
+        if st.button("🔮 Calcular mi predicción →", type="primary",
+                      use_container_width=True, key="p_generar"):
+            datos = {
+                "fecha": str(f_fecha), "producto": str(f_prod), "categoria": str(f_cat),
+                "precio_unitario": float(f_precio), "canal_venta": str(f_canal),
+                "tipo_cliente": str(f_cli), "region_venta": str(f_region),
+                "stock_inicial_periodo": int(f_stock), "tiene_dscto": bool(f_dscto),
+                "porcentaje_dscto": float(f_pct), "es_campain": bool(f_camp),
+                "tipo_campain": str(f_tipo_camp),
+            }
+            with st.spinner("Calculando tu predicción..."):
+                pred = predecir_demanda(datos)
+            st.session_state.pred_resultado = pred
+            st.session_state.pred_contexto  = datos
+            with st.spinner("Guardando resultado..."):
+                api_post_prediccion(pred, datos)
+            st.success("✅ ¡Predicción generada y guardada!")
+            st.rerun()
+
+        pred = st.session_state.get("pred_resultado")
+        if pred:
+            ctx = st.session_state.get("pred_contexto", {})
+            c1, c2, c3 = st.columns([2,1,1])
+            with c1:
+                st.markdown(f"""
 <div class="pred-box">
   <div class="pl">Demanda estimada — {ctx.get("producto","")}</div>
   <div class="pv">{pred:.0f}</div>
   <div class="pu">unidades para {ctx.get("fecha","")}</div>
 </div>""", unsafe_allow_html=True)
-        with c2: kpi("Stock que debes tener", f"{int(pred*1.15):,}", "+15% por seguridad")
-        with c3: kpi("Precisión del modelo", "92.8%", "R² = 0.928")
+            with c2: kpi("Stock que debes tener", f"{int(pred*1.15):,}", "+15% por seguridad")
+            with c3: kpi("Precisión del modelo", "92.8%", "R² = 0.928")
 
-        inv_lista_pred = api_get_inventario()
-        inv_prod_pred = next((i for i in inv_lista_pred if i["producto"] == ctx.get("producto","")), None)
-        if inv_prod_pred:
-            stock_actual_pred = int(inv_prod_pred.get("stock_actual", 0))
-            stock_necesario = int(pred * 1.15)
-            deficit = stock_necesario - stock_actual_pred
+            inv_lista_pred = api_get_inventario()
+            inv_prod_pred = next((i for i in inv_lista_pred if i["producto"] == ctx.get("producto","")), None)
+            if inv_prod_pred:
+                stock_actual_pred = int(inv_prod_pred.get("stock_actual", 0))
+                stock_necesario   = int(pred * 1.15)
+                deficit = stock_necesario - stock_actual_pred
+                st.markdown("---")
+                if deficit > 0:
+                    st.error(f"⚠️ **Necesitas reponer {deficit} uds** de '{ctx.get('producto','')}'. "
+                             f"Tienes {stock_actual_pred} uds en inventario pero necesitas {stock_necesario}.")
+                else:
+                    st.success(f"✅ Tu stock de {stock_actual_pred} uds es suficiente para la predicción de {pred:.0f} uds.")
+
+        _bloque_historial_predicciones()
+
+# ── TAB 2: SIMULADOR WHAT-IF ──────────────────────────────────────────
+    with tab_whatif:
+        st.markdown('<div class="section-note">'
+                    '🔬 <strong>Simulador What-If</strong> — Elige una predicción base y explora '
+                    'cómo cambia la demanda si modificas precio, descuento o campaña. '
+                    'Los resultados son exploratorios y <strong>no se guardan automáticamente</strong>.'
+                    '</div>', unsafe_allow_html=True)
+
+        with st.spinner("Cargando tus predicciones..."):
+            preds_wi = api_get_predicciones_paginado()
+
+        if not preds_wi:
+            empty_state("🔮", "Primero genera una predicción",
+                        "Ve a '🎯 Calcular predicción', genera una y vuelve aquí.")
+        else:
+            opciones_wi_hist = {
+                f"#{p.get('id_prediccion','?')} · {p.get('producto','?')} · "
+                f"{str(p.get('fecha_proyectada','?'))} · "
+                f"{float(p.get('cantidad_predicha',0)):.0f} uds": p
+                for p in preds_wi
+            }
+
+            sel_wi_hist = st.selectbox(
+                "📌 Selecciona una predicción como punto de partida",
+                list(opciones_wi_hist.keys()),
+                key="wi_sel_pred",
+                help="Los valores de esa predicción se cargan abajo como base."
+            )
+
+            p_obj = opciones_wi_hist[sel_wi_hist]
+            pred_original  = float(p_obj.get("cantidad_predicha", 0))
+            precio_base    = float(p_obj.get("precio_unitario", 25.0))
+            dscto_base     = float(p_obj.get("porcentaje_dscto", 0))
+            tiene_dscto_b  = bool(p_obj.get("tiene_dscto", False))
+            camp_base      = bool(p_obj.get("es_campain", False))
+            tipo_camp_base = p_obj.get("tipo_campain", "Ninguna")
+
+            # ── Mostrar condiciones BASE como tarjetas informativas ───────
             st.markdown("---")
-            if deficit > 0:
-                st.error(f"⚠️ **Necesitas reponer {deficit} uds** de '{ctx.get('producto','')}'. "
-                         f"Tienes {stock_actual_pred} uds en inventario pero necesitas {stock_necesario}.")
-            else:
-                st.success(f"✅ Tu stock actual de {stock_actual_pred} uds es suficiente para la predicción de {pred:.0f} uds.")
+            paso_header(1, "Condiciones base de la predicción seleccionada",
+                        "Estos valores vienen de tu predicción — no son editables aquí")
 
-    _bloque_historial_predicciones()
+            b1, b2, b3, b4 = st.columns(4)
+            def _card(label, valor):
+                st.markdown(f"""
+<div style="background:#f7f1e7;border:1px solid #e5d4b8;border-radius:14px;
+            padding:.8rem 1rem;text-align:center;">
+  <div style="font-size:.68rem;color:#7b6a57;font-weight:800;
+              text-transform:uppercase;letter-spacing:.5px;">{label}</div>
+  <div style="font-weight:900;color:#3b271b;font-size:.95rem;
+              margin-top:.35rem;">{valor}</div>
+</div>""", unsafe_allow_html=True)
+
+            with b1: _card("Producto",       p_obj.get("producto","--"))
+            with b2: _card("Categoría",      p_obj.get("categoria","--"))
+            with b3: _card("Canal",          p_obj.get("canal_venta","--"))
+            with b4: _card("Región",         p_obj.get("region_venta","--"))
+
+            b5, b6, b7, b8 = st.columns(4)
+            with b5: _card("Tipo cliente",   p_obj.get("tipo_cliente","--"))
+            with b6: _card("Stock inicial",  f"{int(p_obj.get('stock_inicial',0))} uds")
+            with b7: _card("Fecha proyectada", str(p_obj.get("fecha_proyectada","--")))
+            with b8: _card("Demanda original", f"{pred_original:.0f} uds")
+
+            # ── Sliders de variables a explorar ───────────────────────────
+            st.markdown("---")
+            paso_header(2, "¿Qué quieres cambiar?",
+                        "Mueve los controles y presiona Simular")
+            st.markdown('<div class="section-note">'
+                        'Precio, descuento y campaña son los factores que más puedes '
+                        'controlar como dueño del negocio. El resto permanece igual.'
+                        '</div>', unsafe_allow_html=True)
+
+            ws1, ws2, ws3 = st.columns(3)
+            with ws1:
+                w_precio = st.number_input(
+                    f"💰 Precio (S/.) — base: S/. {precio_base:.2f}",
+                    min_value=0.01, max_value=10000.0,
+                    value=precio_base, step=0.5, format="%.2f",
+                    key=f"wi_precio_{sel_wi_hist}"
+                )
+                delta_precio = w_precio - precio_base
+                if delta_precio != 0:
+                    signo = "↑" if delta_precio > 0 else "↓"
+                    st.caption(f"{signo} S/. {abs(delta_precio):.2f} respecto al base")
+                else:
+                    st.caption("Sin cambio en precio")
+
+            with ws2:
+                w_dscto = st.slider(
+                    f"🏷️ % Descuento — base: {dscto_base:.0f}%",
+                    min_value=0, max_value=100,
+                    value=int(dscto_base),
+                    step=5, key=f"wi_dscto_{sel_wi_hist}"
+                )
+                w_tiene_dscto = w_dscto > 0
+                if w_dscto != int(dscto_base):
+                    st.caption(f"Cambió de {dscto_base:.0f}% → {w_dscto}%")
+                else:
+                    st.caption("Sin cambio en descuento")
+
+            with ws3:
+                w_camp = st.checkbox(
+                    f"🎉 ¿Hay campaña? — base: {'Sí' if camp_base else 'No'}",
+                    value=camp_base,
+                    key=f"wi_camp_{sel_wi_hist}"
+                )
+                w_tipo_camp = tipo_camp_base
+                if w_camp and opciones["campains"]:
+                    idx_camp = 0
+                    if tipo_camp_base in opciones["campains"]:
+                        idx_camp = opciones["campains"].index(tipo_camp_base)
+                    w_tipo_camp = st.selectbox(
+                        "¿Qué campaña?", opciones["campains"],
+                        index=idx_camp,
+                        key=f"wi_tipo_camp_{sel_wi_hist}"
+                    )
+                elif not w_camp:
+                    w_tipo_camp = "Ninguna"
+                if w_camp != camp_base:
+                    st.caption(f"Cambió: {'Sin campaña' if camp_base else 'Con campaña'} → {'Con campaña' if w_camp else 'Sin campaña'}")
+                else:
+                    st.caption("Sin cambio en campaña")
+
+            st.markdown("---")
+
+            hay_cambio = (
+                abs(w_precio - precio_base) > 0.01 or
+                w_dscto != int(dscto_base) or
+                w_camp != camp_base
+            )
+            if not hay_cambio:
+                st.info("💡 Modifica al menos uno de los valores de arriba para ver el impacto.")
+
+            if st.button("🔬 Simular escenario", type="primary",
+                          use_container_width=True, key="wi_simular"):
+                datos_nuevo = {
+                    "fecha":                 str(p_obj.get("fecha_proyectada", date.today())),
+                    "producto":              p_obj.get("producto", ""),
+                    "categoria":             p_obj.get("categoria", ""),
+                    "precio_unitario":       float(w_precio),
+                    "canal_venta":           p_obj.get("canal_venta", ""),
+                    "tipo_cliente":          p_obj.get("tipo_cliente", ""),
+                    "region_venta":          p_obj.get("region_venta", ""),
+                    "stock_inicial_periodo": int(p_obj.get("stock_inicial", 100)),
+                    "tiene_dscto":           w_tiene_dscto,
+                    "porcentaje_dscto":      float(w_dscto),
+                    "es_campain":            bool(w_camp),
+                    "tipo_campain":          str(w_tipo_camp),
+                }
+                with st.spinner("Calculando escenario modificado..."):
+                    pred_nuevo = predecir_demanda(datos_nuevo)
+                st.session_state["wi_pred_base"]   = pred_original
+                st.session_state["wi_pred_nuevo"]  = pred_nuevo
+                st.session_state["wi_datos_nuevo"] = datos_nuevo
+
+            if st.session_state.get("wi_pred_base") is not None:
+                pred_base  = st.session_state["wi_pred_base"]
+                pred_nuevo = st.session_state["wi_pred_nuevo"]
+                diff_wi    = pred_nuevo - pred_base
+                pct_diff   = (diff_wi / pred_base * 100) if pred_base > 0 else 0
+
+                st.markdown('<div class="section-title">📊 Resultado de la simulación</div>',
+                            unsafe_allow_html=True)
+                rc1, rc2, rc3 = st.columns(3)
+                with rc1:
+                    st.markdown(f"""
+<div style="background:#e8f0e0;border:1px solid #c9dda9;border-radius:20px;
+            padding:1.5rem;text-align:center;">
+  <div style="font-size:.8rem;color:#456b32;font-weight:800;margin-bottom:.4rem;">
+    PREDICCIÓN ORIGINAL
+  </div>
+  <div style="font-size:2.8rem;font-weight:900;color:#456b32;line-height:1;">
+    {pred_base:.0f}
+  </div>
+  <div style="font-size:.82rem;color:#5d8c45;margin-top:.3rem;">unidades estimadas</div>
+</div>""", unsafe_allow_html=True)
+                with rc2:
+                    st.markdown(f"""
+<div class="pred-box">
+  <div class="pl">CON TUS CAMBIOS</div>
+  <div class="pv">{pred_nuevo:.0f}</div>
+  <div class="pu">unidades estimadas</div>
+</div>""", unsafe_allow_html=True)
+                with rc3:
+                    signo = "+" if diff_wi >= 0 else ""
+                    color_diff = "#5d8c45" if diff_wi >= 0 else "#b04a35"
+                    st.markdown(f"""
+<div style="background:#fffdf8;border:2px solid {'#c9dda9' if diff_wi >= 0 else '#e6b4a1'};
+            border-radius:20px;padding:1.5rem;text-align:center;">
+  <div style="font-size:.8rem;color:#7b6a57;font-weight:800;margin-bottom:.4rem;">IMPACTO</div>
+  <div style="font-size:2.4rem;font-weight:900;color:{color_diff};line-height:1;">
+    {signo}{diff_wi:.0f} uds
+  </div>
+  <div style="font-size:.82rem;color:#7b6a57;margin-top:.3rem;">
+    {signo}{pct_diff:.1f}% respecto al original
+  </div>
+</div>""", unsafe_allow_html=True)
+
+                st.markdown("<div style='margin-top:.8rem;'></div>", unsafe_allow_html=True)
+                if diff_wi > 0:
+                    st.success(f"✅ Con estos cambios la demanda sube **{diff_wi:.0f} uds** ({pct_diff:.1f}%). "
+                               f"Asegúrate de tener al menos {int(pred_nuevo * 1.15)} uds en stock.")
+                elif diff_wi < 0:
+                    st.warning(f"⚠️ Con estos cambios la demanda baja **{abs(diff_wi):.0f} uds** ({abs(pct_diff):.1f}%). "
+                               f"Evalúa si el cambio de precio/descuento lo justifica.")
+                else:
+                    st.info("ℹ️ La demanda no cambia significativamente con este escenario.")
+
+                st.markdown("---")
+                datos_guardar = st.session_state.get("wi_datos_nuevo", {})
+                if datos_guardar and st.button("💾 Guardar este escenario como predicción",
+                                                use_container_width=True, key="wi_guardar"):
+                    with st.spinner("Guardando..."):
+                        api_post_prediccion(pred_nuevo, datos_guardar)
+                    st.success("✅ Escenario guardado en el historial de predicciones.")
+
+    # ── TAB 3: COMPARAR PREDICCIONES ─────────────────────────────────────
+    with tab_comp:
+        st.markdown('<div class="section-note">'
+                    'Elige dos predicciones del historial y compáralas lado a lado. '
+                    'Útil para decidir entre dos escenarios distintos.'
+                    '</div>', unsafe_allow_html=True)
+
+        with st.spinner("Cargando predicciones..."):
+            preds_comp = api_get_predicciones_paginado()
+
+        if not preds_comp or len(preds_comp) < 2:
+            empty_state("📊", "Necesitas al menos 2 predicciones para comparar",
+                        "Genera predicciones en la pestaña 'Calcular predicción' primero.")
+        else:
+            opciones_comp = {
+                f"#{p.get('id_prediccion','?')} · {p.get('producto','?')} · "
+                f"{str(p.get('fecha_proyectada','?'))} · {float(p.get('cantidad_predicha',0)):.0f} uds": p
+                for p in preds_comp
+            }
+            labels = list(opciones_comp.keys())
+
+            cc1, cc2 = st.columns(2)
+            with cc1:
+                st.markdown('<div class="section-title">📌 Predicción A</div>',
+                            unsafe_allow_html=True)
+                sel_a = st.selectbox("Selecciona la primera", labels,
+                                      index=0, key="comp_a")
+            with cc2:
+                st.markdown('<div class="section-title">📌 Predicción B</div>',
+                            unsafe_allow_html=True)
+                sel_b = st.selectbox("Selecciona la segunda", labels,
+                                      index=min(1, len(labels)-1), key="comp_b")
+
+            pred_a = opciones_comp[sel_a]
+            pred_b = opciones_comp[sel_b]
+
+            if sel_a == sel_b:
+                st.warning("⚠️ Elige dos predicciones distintas para comparar.")
+            else:
+                st.markdown("---")
+                st.markdown('<div class="section-title">📊 Comparativa lado a lado</div>',
+                            unsafe_allow_html=True)
+
+                def _campo_comp(label, val_a, val_b, es_numero=False):
+                    try:
+                        a = float(val_a) if es_numero else str(val_a)
+                        b = float(val_b) if es_numero else str(val_b)
+                        if es_numero:
+                            diff = a - b
+                            color_a = "#5d8c45" if diff > 0 else ("#b04a35" if diff < 0 else "#3b271b")
+                            color_b = "#b04a35" if diff > 0 else ("#5d8c45" if diff < 0 else "#3b271b")
+                            return (f"<span style='color:{color_a};font-weight:900'>{a:.1f}</span>",
+                                    f"<span style='color:{color_b};font-weight:900'>{b:.1f}</span>")
+                        mismo = str(a) == str(b)
+                        color = "#3b271b" if mismo else "#c9953b"
+                        return (f"<span style='color:{color}'>{a}</span>",
+                                f"<span style='color:{color}'>{b}</span>")
+                    except Exception:
+                        return str(val_a), str(val_b)
+
+                campos = [
+                    ("Producto",         pred_a.get("producto","--"),           pred_b.get("producto","--"),          False),
+                    ("Categoría",        pred_a.get("categoria","--"),           pred_b.get("categoria","--"),         False),
+                    ("Fecha proyectada", pred_a.get("fecha_proyectada","--"),    pred_b.get("fecha_proyectada","--"),  False),
+                    ("Precio (S/.)",     pred_a.get("precio_unitario",0),        pred_b.get("precio_unitario",0),      True),
+                    ("Canal de venta",   pred_a.get("canal_venta","--"),         pred_b.get("canal_venta","--"),       False),
+                    ("Tipo de cliente",  pred_a.get("tipo_cliente","--"),        pred_b.get("tipo_cliente","--"),      False),
+                    ("Región",           pred_a.get("region_venta","--"),        pred_b.get("region_venta","--"),      False),
+                    ("Stock inicial",    pred_a.get("stock_inicial",0),          pred_b.get("stock_inicial",0),        True),
+                    ("¿Descuento?",      "Sí" if pred_a.get("tiene_dscto") else "No",
+                                         "Sí" if pred_b.get("tiene_dscto") else "No",                                 False),
+                    ("% Descuento",      pred_a.get("porcentaje_dscto",0),       pred_b.get("porcentaje_dscto",0),    True),
+                    ("¿Campaña?",        "Sí" if pred_a.get("es_campain") else "No",
+                                         "Sí" if pred_b.get("es_campain") else "No",                                  False),
+                    ("Tipo campaña",     pred_a.get("tipo_campain","Ninguna"),   pred_b.get("tipo_campain","Ninguna"), False),
+                ]
+
+                tabla_html = """
+<table style="width:100%;border-collapse:collapse;font-size:.88rem;">
+  <thead>
+    <tr style="background:#5a351e;color:#fff8ea;">
+      <th style="padding:.7rem 1rem;text-align:left;border-radius:8px 0 0 0;">Condición</th>
+      <th style="padding:.7rem 1rem;text-align:center;">Predicción A</th>
+      <th style="padding:.7rem 1rem;text-align:center;border-radius:0 8px 0 0;">Predicción B</th>
+    </tr>
+  </thead>
+  <tbody>"""
+                for i, (label, va, vb, es_num) in enumerate(campos):
+                    va_html, vb_html = _campo_comp(label, va, vb, es_num)
+                    bg = "#fffdf8" if i % 2 == 0 else "#f7f1e7"
+                    tabla_html += f"""
+    <tr style="background:{bg};">
+      <td style="padding:.6rem 1rem;font-weight:700;color:#7b6a57;">{label}</td>
+      <td style="padding:.6rem 1rem;text-align:center;">{va_html}</td>
+      <td style="padding:.6rem 1rem;text-align:center;">{vb_html}</td>
+    </tr>"""
+
+                cant_a = float(pred_a.get("cantidad_predicha", 0))
+                cant_b = float(pred_b.get("cantidad_predicha", 0))
+                stock_a = float(pred_a.get("stock_recomendado", 0))
+                stock_b = float(pred_b.get("stock_recomendado", 0))
+                diff_cant = cant_a - cant_b
+                color_a_res = "#5d8c45" if diff_cant >= 0 else "#b04a35"
+                color_b_res = "#b04a35" if diff_cant >= 0 else "#5d8c45"
+
+                tabla_html += f"""
+    <tr style="background:#5a351e;">
+      <td style="padding:.8rem 1rem;font-weight:900;color:#f7dfb7;">🔮 DEMANDA ESTIMADA</td>
+      <td style="padding:.8rem 1rem;text-align:center;font-size:1.3rem;font-weight:900;color:{color_a_res};">{cant_a:.0f} uds</td>
+      <td style="padding:.8rem 1rem;text-align:center;font-size:1.3rem;font-weight:900;color:{color_b_res};">{cant_b:.0f} uds</td>
+    </tr>
+    <tr style="background:#6b3f21;">
+      <td style="padding:.7rem 1rem;font-weight:900;color:#ead4ad;">📦 Stock sugerido</td>
+      <td style="padding:.7rem 1rem;text-align:center;font-weight:800;color:#f5e2bd;">{stock_a:.0f} uds</td>
+      <td style="padding:.7rem 1rem;text-align:center;font-weight:800;color:#f5e2bd;">{stock_b:.0f} uds</td>
+    </tr>
+  </tbody>
+</table>"""
+                st.markdown(tabla_html, unsafe_allow_html=True)
+                st.markdown("<div style='margin-top:1rem'></div>", unsafe_allow_html=True)
+
+                if diff_cant > 0:
+                    st.success(f"✅ La Predicción A estima **{diff_cant:.0f} uds más** que la B. "
+                               f"Si las condiciones de A son más probables, prepárate con más stock.")
+                elif diff_cant < 0:
+                    st.info(f"ℹ️ La Predicción B estima **{abs(diff_cant):.0f} uds más** que la A. "
+                            f"Evalúa qué condiciones son más realistas para tu negocio.")
+                else:
+                    st.info("ℹ️ Ambas predicciones estiman la misma demanda.")
 
 
 def page_analisis():
@@ -3511,6 +3955,7 @@ def page_modelo_predictivo():
                     st.session_state["modelo_local_mae"] = mae_local
                     st.session_state["modelo_local_n"]   = len(df_train)
                     st.success(f"✅ Modelo reentrenado con {len(df_train)} registros de tu empresa.")
+                    st.balloons()
                 except Exception as e:
                     st.error(f"❌ Error durante el reentrenamiento: {e}")
 
@@ -3592,7 +4037,16 @@ def page_modelo_predictivo():
             lp_stock   = st.number_input("📦 Stock inicial", min_value=0,
                                           value=100, step=10, key="lp_stock")
             lp_dscto   = st.checkbox("¿Descuento?", key="lp_dscto")
-            lp_pct     = st.number_input("% descuento", 0.0, 80.0, 0.0, key="lp_pct") if lp_dscto else 0.0
+            lp_pct     = st.number_input("% descuento", 0.0, 100.0, 0.0, key="lp_pct") if lp_dscto else 0.0
+
+        # FIX: agregar campaña — antes estaba hardcodeado como False
+        lpc1, lpc2 = st.columns(2)
+        with lpc1:
+            lp_camp = st.checkbox("¿Hay campaña? (Día de la Madre, Navidad, etc.)", key="lp_camp")
+        with lpc2:
+            lp_tipo_camp = "Ninguna"
+            if lp_camp and opciones["campains"]:
+                lp_tipo_camp = st.selectbox("¿Qué campaña?", opciones["campains"], key="lp_tipo_camp")
 
         if st.button("🔮 Calcular con MI modelo", type="primary",
                       use_container_width=True, key="btn_pred_local"):
@@ -3601,7 +4055,9 @@ def page_modelo_predictivo():
                 "precio_unitario": float(lp_precio), "canal_venta": str(lp_canal),
                 "tipo_cliente": str(lp_cli), "region_venta": str(lp_region),
                 "stock_inicial_periodo": int(lp_stock), "tiene_dscto": bool(lp_dscto),
-                "porcentaje_dscto": float(lp_pct), "es_campain": False, "tipo_campain": "Ninguna",
+                "porcentaje_dscto": float(lp_pct),
+                "es_campain": bool(lp_camp),          # FIX: ya no hardcodeado
+                "tipo_campain": str(lp_tipo_camp),    # FIX: ya no hardcodeado
             }
             try:
                 # Predicción con modelo local
@@ -3613,7 +4069,7 @@ def page_modelo_predictivo():
                     "porcentaje_dscto":      float(datos_pred["porcentaje_dscto"]),
                     "stock_inicial_periodo": int(datos_pred["stock_inicial_periodo"]),
                     "tiene_dscto":           int(bool(datos_pred["tiene_dscto"])),
-                    "es_campain":            0,
+                    "es_campain":            int(bool(datos_pred["es_campain"])),  # FIX
                     "año":        fecha_dt.year,
                     "mes":        mes,
                     "semana_año": int(fecha_dt.isocalendar().week),
@@ -3627,7 +4083,7 @@ def page_modelo_predictivo():
                     "canal_venta":  str(datos_pred["canal_venta"]),
                     "tipo_cliente": str(datos_pred["tipo_cliente"]),
                     "region_venta": str(datos_pred["region_venta"]),
-                    "tipo_campain": "Ninguna",
+                    "tipo_campain": str(datos_pred["tipo_campain"]),  # FIX
                 }
                 X_pred = pd.DataFrame([fila])
                 pred_local = max(0.0, round(float(pipe_local.predict(X_pred)[0]), 1))
@@ -3785,7 +4241,7 @@ def page_crear_colaborador():
             })
             if res["ok"]:
                 st.success(f"✅ Colaborador '{usr}' creado.")
-                
+                st.balloons()
             else:
                 st.error(res.get("mensaje", "Error al crear colaborador."))
 
@@ -3952,7 +4408,7 @@ El stock se devuelve al registro del producto, pero como está descontinuado **n
                 st.session_state.consultas_enviadas.append(consulta)
 
                 st.success("✅ Consulta enviada correctamente.")
-                
+                st.balloons()
                 st.info(f"📧 Te responderemos a **{s_correo}** en 24-48 horas hábiles.")
                 with st.expander("📋 Ver resumen de tu consulta"):
                     st.json(consulta)
