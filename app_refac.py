@@ -47,7 +47,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
 # =============================================================================
 # CSS — MEJORADO UX (sin cambiar colores) + nuevos estilos para inventario
 # =============================================================================
@@ -464,11 +463,11 @@ def stock_blocked_msg(producto: str, motivo: str):
 
 AYUDA_POR_PAGINA = {
     "Dashboard":       "Aquí ves un resumen de todo. Los números de arriba son tus ventas del período.",
-    "Gestión comercial": "Sube tu archivo de ventas o agrégalas una por una. Empieza por la pestaña 'Subir archivo'.",
-    "Inventario":      "Aquí controlas cuántos productos tienes. Si un producto aparece en rojo, te estás quedando sin stock.",
-    "Predicción":      "Elige el producto y la fecha. El sistema te dirá cuánto podrías vender ese mes.",
-    "Análisis de resultados": "Estos números muestran qué tan preciso es el modelo. Mientras más cerca de 100%, mejor.",
-    "Inteligencia y Recomendaciones": "El asistente te puede responder dudas sobre tus ventas. Puedes escribirle como en un chat.",
+    "Gestión comercial": "Sube tu historial de ventas en archivo Excel o CSV, también puedes registrar tus ventas manualmente, o revisa y descarga todas tus ventas registradas.",
+    "Inventario": "Aquí controlas cuántos productos tienes y registras entradas de mercadería. Si un producto aparece en rojo, te estás quedando sin stock.",
+    "Predicción": "Aquí puedes calcular la demanda estimada para un producto, simular escenarios cambiando precio o descuento con el What-If, y comparar dos predicciones lado a lado para tomar mejores decisiones.",
+    "Análisis de resultados": "Aquí ves qué tan preciso es tu modelo predictivo comparando ventas reales vs predichas, y qué factores influyen más en la demanda de tus productos.",
+    "Inteligencia y Recomendaciones": "Aquí ves recomendaciones sobre tus productos estrella, stock crítico y canal de venta. También puedes chatear con el asistente sobre tus ventas, inventario o predicciones.",
     "Reportes":        "Descarga tus ventas o revisa predicciones anteriores desde aquí.",
     "Crear colaborador": "Crea una cuenta para tu personal de ventas. Ellos podrán registrar ventas pero no ver reportes.",
     "Cuenta":          "Aquí puedes cambiar tu contraseña o actualizar tus datos personales.",
@@ -1259,7 +1258,6 @@ def login_view():
                                 })
                             if res_u["ok"]:
                                 st.success("✅ ¡Cuenta creada! Ya puedes iniciar sesión.")
-                                st.balloons()
                                 st.session_state.reg_empresa_id     = 0
                                 st.session_state.reg_empresa_nombre = ""
                                 st.session_state.reg_paso = 1
@@ -1389,8 +1387,19 @@ def page_dashboard():
     if "fecha" in df_orig.columns:
         df_orig["fecha_dt"] = pd.to_datetime(df_orig["fecha"], errors="coerce")
 
+    #MARGEN BRUTO
+    #*Esto usa precio_final_venta cuando existe y es mayor a 0 (venta manual con o sin descuento),
+    # y cae a precio_unitario cuando no existe la columna (ventas CSV antiguas que no tienen ese campo).#
+    if "precio_final_venta" in df_orig.columns:
+        df_orig["precio_final_venta"] = pd.to_numeric(df_orig["precio_final_venta"], errors="coerce").fillna(0)
+        df_orig["precio_efectivo"] = df_orig["precio_final_venta"].where(
+            df_orig["precio_final_venta"] > 0, df_orig["precio_unitario"]
+        )
+    else:
+        df_orig["precio_efectivo"] = df_orig["precio_unitario"]
+
     df_orig["margen_bruto"] = (
-        df_orig["precio_unitario"] - df_orig["costo_unitario"]
+        df_orig["precio_efectivo"] - df_orig["costo_unitario"]
     ) * df_orig["cantidad_vendida"]
 
     st.markdown('<div class="section-title">🔍 Filtrar ventas</div>',
@@ -1713,7 +1722,6 @@ def _form_campos_venta(prefix: str, opciones: dict, df_ventas: pd.DataFrame = No
     - Si no hay inventario, cae al catálogo del modelo (modo compatibilidad).
     - Muestra stock real desde backend.
     """
-    prods_modelo = opciones["productos"]
     cats     = opciones["categorias"]
     canales  = opciones["canales"]
     clientes = opciones["clientes"]
@@ -1725,18 +1733,21 @@ def _form_campos_venta(prefix: str, opciones: dict, df_ventas: pd.DataFrame = No
     inv_map_form   = {i["producto"]: i for i in inv_lista_form}
     productos_en_inventario = sorted(inv_map_form.keys())
 
-    # Lista del dropdown: inventario real si hay, sino catálogo del modelo
-    if productos_en_inventario:
-        lista_dropdown = productos_en_inventario
-    else:
-        lista_dropdown = prods_modelo
+    if not productos_en_inventario:
+        empty_state("📦", "Aún no tienes productos en inventario",
+                    "Ve a Inventario → Registrar producto antes de vender.")
+        return None
+
+    lista_dropdown = productos_en_inventario
 
     # ── PASO 1: ¿Qué vendiste? ────────────────────────────────────
     paso_header(1, "¿Qué vendiste?", "Producto, categoría y fecha")
     c1, c2, c3 = st.columns(3)
+
     with c1:
         f_fecha = st.date_input("📅 Fecha de la venta", value=date.today(), key=f"{prefix}_fecha")
 
+    with c2:
         if lista_dropdown:
             f_prod = st.selectbox("🧵 Producto", lista_dropdown, key=f"{prefix}_prod")
         else:
@@ -1749,7 +1760,6 @@ def _form_campos_venta(prefix: str, opciones: dict, df_ventas: pd.DataFrame = No
         cat_auto = ""
 
         if f_prod and f_prod in inv_map_form:
-            # CASO 1: producto en mi inventario real
             inv_prod = inv_map_form[f_prod]
             stock_sugerido = int(inv_prod.get("stock_actual", 0))
             stock_min = int(inv_prod.get("stock_minimo", 10))
@@ -1766,7 +1776,6 @@ def _form_campos_venta(prefix: str, opciones: dict, df_ventas: pd.DataFrame = No
                 st.success(f"🟢 Stock disponible: **{stock_sugerido} uds**")
 
         elif f_prod and df_ventas is not None and not df_ventas.empty:
-            # CASO 2: producto no está en inventario pero hay datos del CSV
             if "producto" in df_ventas.columns:
                 df_ventas["cantidad_vendida"] = pd.to_numeric(
                     df_ventas["cantidad_vendida"], errors="coerce").fillna(0)
@@ -1783,17 +1792,10 @@ def _form_campos_venta(prefix: str, opciones: dict, df_ventas: pd.DataFrame = No
             st.info("ℹ️ Este producto no está en tu inventario real. La venta se registrará "
                     "pero no descontará stock.")
 
-        # Categoría
-        if cat_auto and cats:
-            try:
-                idx_cat = cats.index(cat_auto)
-            except ValueError:
-                idx_cat = 0
-            f_cat = st.selectbox("📂 Categoría", cats, index=idx_cat, key=f"{prefix}_cat")
-        else:
-            f_cat = (st.selectbox("📂 Categoría", cats, key=f"{prefix}_cat") if cats
-                     else st.text_input("📂 Categoría", placeholder="Ej: Polos, Pantalones...",
-                                         key=f"{prefix}_cat"))
+    with c3:
+        st.text_input("📂 Categoría", value=cat_auto, disabled=True, key=f"{prefix}_cat_display_{f_prod}")
+        f_cat = cat_auto
+        field_hint("Categoría fijada en tu inventario")
 
     # ── PASO 2: ¿Cuánto y a qué precio? ──────────────────────────
     paso_header(2, "¿Cuánto vendiste y a qué precio?", "Cantidades y precios")
@@ -1812,13 +1814,35 @@ def _form_campos_venta(prefix: str, opciones: dict, df_ventas: pd.DataFrame = No
         precio_default = 25.0
         if id_inventario > 0:
             precio_default = float(inv_map_form[f_prod].get("precio_unitario", 25.0))
-        f_precio = st.number_input("💰 Precio de venta (S/.)", min_value=0.01,
-                                    value=precio_default, step=0.5, key=f"{prefix}_precio")
-        field_hint("¿Cuánto cobras por cada unidad?")
+
+        st.number_input("💰 Precio de venta (S/.)",
+                        value=precio_default, step=0.5,
+                        disabled=True,
+                        key=f"{prefix}_precio_display_{f_prod}",
+                        help="Para cambiar el precio, ve a Inventario → Editar producto")
+        field_hint("Precio fijado en tu inventario")
+        f_precio = precio_default
     with c2c:
-        f_costo = st.number_input("🏭 Costo de producción (S/.)", min_value=0.01,
-                                   value=12.0, step=0.5, key=f"{prefix}_costo")
-        field_hint("¿Cuánto te cuesta hacer o comprar cada prenda?")
+        costo_default = 0.0
+        if id_inventario > 0:
+            costo_default = float(inv_map_form[f_prod].get("costo_unitario", 0))
+
+        if es_gerente():
+            st.number_input(
+                "🏭 Costo unitario (S/.)",
+                value=costo_default, step=0.5,
+                disabled=True,
+                key=f"{prefix}_costo_display_{f_prod}",
+                help="Para actualizar el costo, ve a Inventario → Editar producto"
+            )
+            field_hint("Viene de tu inventario. Si cambió, actualízalo en Inventario.")
+        else:
+            st.markdown("""
+    <div style="background:#f7f1e7;border:1px solid #e5d4b8;border-radius:12px;
+                padding:.7rem 1rem;font-size:.85rem;color:#7b6a57;">
+    🔒 El costo de producción es información reservada del Gerente
+    </div>""", unsafe_allow_html=True)
+        f_costo = costo_default
 
     # ── PASO 3: ¿A quién y dónde? ────────────────────────────────
     paso_header(3, "¿A quién le vendiste y dónde?", "Canal, cliente y región")
@@ -1836,9 +1860,33 @@ def _form_campos_venta(prefix: str, opciones: dict, df_ventas: pd.DataFrame = No
     with c4:
         f_dscto = st.checkbox("¿Le hiciste descuento?", key=f"{prefix}_dscto")
         f_pct = 0.0
+        precio_final = f_precio #por defecto, precio de lista sin aplicar el dscto
         if f_dscto:
-            f_pct = st.number_input("% de descuento que diste",
-                                     1.0, 100.0, 10.0, 5.0, key=f"{prefix}_pct")
+            modo_dscto = st.radio("¿Cómo calculaste el descuento?",
+                                ["En soles (S/.)", "En porcentaje (%)"],
+                                horizontal=True, key=f"{prefix}_modo_dscto")
+
+            if modo_dscto == "En soles (S/.)":
+                dscto_soles = st.number_input("¿Cuánto descontaste? (S/.)",
+                                            min_value=0.10, max_value=f_precio,
+                                            value=min(2.0, f_precio), step=0.5,
+                                            key=f"{prefix}_dscto_soles")
+                f_pct = (dscto_soles / f_precio) * 100 if f_precio > 0 else 0
+                precio_final = f_precio - dscto_soles
+            else:
+                f_pct = st.number_input("% de descuento",
+                                        min_value=1.0, max_value=100.0,
+                                        value=10.0, step=1.0,
+                                        key=f"{prefix}_pct")
+                precio_final = f_precio * (1 - f_pct / 100)
+
+            st.markdown(f"""
+    <div style="background:#edf4df;border:1px solid #c9dda9;border-radius:12px;
+                padding:.6rem 1rem;margin-top:.3rem;">
+    <span style="font-size:.8rem;color:#456b32;">Precio final: </span>
+    <strong style="color:#456b32;font-size:1.1rem;">S/. {precio_final:.2f}</strong>
+    <span style="font-size:.75rem;color:#7b6a57;"> ({f_pct:.1f}% dscto.)</span>
+    </div>""", unsafe_allow_html=True)
     with c5:
         f_camp = st.checkbox("¿Fue durante una campaña? (Madre, Navidad, etc.)",
                               key=f"{prefix}_camp")
@@ -1855,7 +1903,7 @@ def _form_campos_venta(prefix: str, opciones: dict, df_ventas: pd.DataFrame = No
         if id_inventario > 0:
             st.number_input(
                 "📦 Stock antes de esta venta",
-                min_value=0, value=stock_sugerido, step=1, key=f"{prefix}_stock_ini",
+                min_value=0, value=stock_sugerido, step=1, key=f"{prefix}_stock_ini_{f_prod}",
                 disabled=True,
                 help="Auto-completado desde tu inventario real para trazabilidad")
             f_stock_ini = stock_sugerido
@@ -1883,6 +1931,7 @@ def _form_campos_venta(prefix: str, opciones: dict, df_ventas: pd.DataFrame = No
     return {
         "fecha": str(f_fecha), "producto": str(f_prod), "categoria": str(f_cat),
         "cantidad_vendida": int(f_cant), "precio_unitario": float(f_precio),
+        "precio_final_venta": float(precio_final),
         "costo_unitario": float(f_costo), "canal_venta": str(f_canal),
         "tipo_cliente": str(f_cli), "region_venta": str(f_region),
         "modalidad_pago": "Efectivo",
@@ -1893,10 +1942,9 @@ def _form_campos_venta(prefix: str, opciones: dict, df_ventas: pd.DataFrame = No
         # campos internos
         "_id_inventario":   id_inventario,
         "_tiene_inventario": id_inventario > 0,
-        "_puede_vender":    puede_vender_flag,  # ← FIX
-        "_es_bloqueado":    False,              # ← FIX
+        "_puede_vender":    puede_vender_flag,
+        "_es_bloqueado":    False,
     }
-
 
 def _guardar_venta_completa(datos: dict) -> bool:
     """Guarda venta + descuenta stock automáticamente si producto está en inventario."""
@@ -1933,10 +1981,10 @@ def _guardar_venta_completa(datos: dict) -> bool:
 
         nuevo_stock = res_desc.get("data", {}).get("stock_actual", "?")
         st.success(f"✅ Venta registrada. Stock restante de '{datos['producto']}': **{nuevo_stock} uds**")
-        st.balloons()
+       
     else:
         st.success("✅ Venta registrada (sin descuento de stock — producto fuera del inventario).")
-        st.balloons()
+   
 
     return True
 
@@ -1977,14 +2025,23 @@ def page_gestion_comercial():
 | `tipo_campain` | Texto | Ninguna |
 | `stock_inicial_periodo` | Número | 100 |
 """)
-        archivo = st.file_uploader("Selecciona tu archivo (Excel o CSV)",
-                                    type=["csv","xlsx"])
+        archivo = st.file_uploader("Selecciona tu archivo (Excel o CSV)", type=["csv","xlsx"])
         if archivo:
             try:
-                df_prev = pd.read_excel(archivo) if archivo.name.endswith(".xlsx") \
-                          else pd.read_csv(archivo)
+                if archivo.name.endswith(".xlsx"):
+                    df_prev = pd.read_excel(archivo)
+                else:
+                    raw_bytes = archivo.read()
+                    try:
+                        contenido = raw_bytes.decode("utf-8-sig")
+                    except UnicodeDecodeError:
+                        contenido = raw_bytes.decode("latin-1")
+                    import io as _io
+                    df_prev = pd.read_csv(_io.StringIO(contenido), sep=None, engine="python")
+
                 if archivo.name.endswith(".xlsx"):
                     st.info("📊 Archivo Excel detectado — lo convertiremos a CSV automáticamente.")
+
                 st.markdown(f'<div class="section-note">Vista previa: '
                             f'<strong>{len(df_prev):,} filas encontradas</strong></div>',
                             unsafe_allow_html=True)
@@ -1994,11 +2051,23 @@ def page_gestion_comercial():
                             "costo_unitario","canal_venta","tipo_cliente","region_venta",
                             "tiene_dscto","porcentaje_dscto","es_campain","tipo_campain",
                             "stock_inicial_periodo"]
+
                 faltantes = [c for c in cols_req if c not in df_prev.columns]
+                extras    = [c for c in df_prev.columns if c not in cols_req]
+
                 if faltantes:
-                    st.error(f"❌ Faltan estas columnas en tu archivo: `{'`, `'.join(faltantes)}`")
+                    st.error(f"❌ Faltan estas columnas obligatorias: `{'`, `'.join(faltantes)}`")
+                    st.info("💡 Revisa que los nombres coincidan exactamente (sin tildes, sin espacios extra).")
                 else:
-                    st.success("✅ El archivo tiene todas las columnas necesarias.")
+                    if extras:
+                        st.warning(f"⚠️ Tu archivo tiene columnas extra que serán ignoradas: `{'`, `'.join(extras)}` — no pasa nada, solo usamos las necesarias.")
+
+                    # Solo tomar las columnas que necesita el sistema
+                    df_enviar = df_prev[cols_req].copy()
+
+                    st.success(f"✅ Archivo válido — {len(df_enviar):,} filas listas para subir.")
+                    st.dataframe(df_enviar.head(3), use_container_width=True)
+
                     if st.button("⬆️ Subir al sistema", key="btn_subir_csv"):
                         st.session_state["confirmar_csv"] = True
 
@@ -2006,27 +2075,33 @@ def page_gestion_comercial():
                         st.warning("⚠️ **¿Confirmas subir este archivo?** Reemplaza el CSV anterior pero conserva ventas manuales.")
                         c1, c2 = st.columns(2)
                         with c1:
-                            if st.button("❌ Cancelar", use_container_width=True,
-                                          key="cancel_csv"):
+                            if st.button("❌ Cancelar", use_container_width=True, key="cancel_csv"):
                                 st.session_state["confirmar_csv"] = False
                                 st.rerun()
                         with c2:
                             if st.button("✅ Sí, subir archivo", type="primary",
-                                          use_container_width=True, key="confirm_csv"):
+                                        use_container_width=True, key="confirm_csv"):
                                 st.session_state["confirmar_csv"] = False
                                 buf = io.BytesIO()
-                                df_prev.to_csv(buf, index=False)
+                                df_enviar.to_csv(buf, index=False, encoding="utf-8")
                                 buf.seek(0)
-                                with st.spinner("Subiendo tu archivo..."):
-                                    res = api_subir_csv(buf.read(),
-                                          archivo.name.replace(".xlsx",".csv"))
+                                with st.spinner("Subiendo tu archivo... (puede tardar hasta 2 minutos si el servidor acaba de despertar)"):
+                                    res = api_subir_csv(buf.read(), archivo.name.replace(".xlsx", ".csv"))
                                 if res["ok"]:
                                     st.success(f"✅ {res['mensaje']}")
-                                    st.balloons()
                                 else:
-                                    st.error(f"❌ {res['mensaje']}")
+                                    st.error(f"❌ No se pudo subir el archivo.")
+                                    # Mostrar el error real
+                                    msg = res.get("mensaje", "")
+                                    if msg:
+                                        with st.expander("🔍 Ver detalle del error"):
+                                            st.code(msg)
+                                    st.info("💡 Posibles causas: el servidor tardó demasiado (intenta de nuevo), "
+                                            "el archivo tiene datos inválidos, o hay un problema de conexión.")
+
             except Exception as e:
                 st.error(f"❌ No pudimos leer el archivo: {e}")
+                st.info("💡 Asegúrate de que el archivo no esté abierto en Excel al subirlo.")
 
     with tab_manual:
         st.markdown('<div class="section-note">'
@@ -2078,6 +2153,7 @@ def page_gestion_comercial():
 
             cols_mostrar = [c for c in [
                 "fecha","producto","categoria","cantidad_vendida","precio_unitario",
+                "precio_final_venta",
                 "costo_unitario","canal_venta","tipo_cliente","region_venta",
                 "tiene_dscto","porcentaje_dscto","es_campain","tipo_campain",
                 "stock_inicial_periodo"
@@ -2233,7 +2309,7 @@ def page_registrar_ventas():
 
             cols_mostrar = [c for c in [
                 "fecha","producto","categoria","cantidad_vendida",
-                "precio_unitario","canal_venta","tipo_cliente","region_venta"
+                "precio_unitario","precio_final_venta","canal_venta","tipo_cliente","region_venta"
             ] if c in df.columns]
             st.dataframe(df[cols_mostrar], use_container_width=True, height=280)
             st.caption(f"{len(df):,} ventas totales de la empresa")
@@ -2372,10 +2448,21 @@ def page_inventario():
             if sel_estado != "Todos":
                 df_show = df_show[df_show["estado"] == sel_estado]
 
-            cols_disp = ["producto", "categoria", "stock_actual", "stock_minimo", "precio_unitario", "estado"]
+            if es_gerente():
+                cols_disp = ["producto", "categoria", "stock_actual", "stock_minimo",
+                            "precio_unitario", "costo_unitario", "estado"]
+            else:
+                cols_disp = ["producto", "categoria", "stock_actual", "stock_minimo",
+                            "precio_unitario", "estado"]
             cols_disp = [c for c in cols_disp if c in df_show.columns]
             df_show_clean = df_show[cols_disp].copy()
-            df_show_clean.columns = ["Producto", "Categoría", "Stock actual", "Stock mínimo", "Precio (S/.)", "Estado"]
+            nombres_cols = {
+                "producto": "Producto", "categoria": "Categoría",
+                "stock_actual": "Stock actual", "stock_minimo": "Stock mínimo",
+                "precio_unitario": "Precio (S/.)", "costo_unitario": "Costo (S/.)",
+                "estado": "Estado"
+            }
+            df_show_clean.columns = [nombres_cols.get(c, c) for c in cols_disp]
             st.dataframe(df_show_clean, use_container_width=True, height=350)
             st.caption(f"{len(df_show)} de {len(df_inv)} productos")
 
@@ -2419,27 +2506,34 @@ def page_inventario():
                         with ec1:
                             e_nombre = st.text_input("Producto", value=sel_edit.get("producto", ""))
                             e_cat = st.selectbox("Categoría",
-                                                  sorted(get_opciones()["categorias"]),
-                                                  index=sorted(get_opciones()["categorias"]).index(sel_edit.get("categoria", ""))
-                                                  if sel_edit.get("categoria","") in get_opciones()["categorias"] else 0)
-                        with ec2:
-                            e_stock = st.number_input("Stock actual", min_value=0,
-                                                       value=int(sel_edit.get("stock_actual", 0)))
-                            e_min = st.number_input("Stock mínimo", min_value=0,
-                                                     value=int(sel_edit.get("stock_minimo", 10)))
-                        with ec3:
-                            e_precio = st.number_input("Precio (S/.)", min_value=0.01,
-                                                       value=float(sel_edit.get("precio_unitario", 25.0)))
+                                                    sorted(get_opciones()["categorias"]),
+                                                    index=sorted(get_opciones()["categorias"]).index(sel_edit.get("categoria", ""))
+                                                    if sel_edit.get("categoria","") in get_opciones()["categorias"] else 0)
                             e_um = st.selectbox("Unidad", ["Unidad","Docena","Par","Metro"],
                                                 index=["Unidad","Docena","Par","Metro"].index(sel_edit.get("unidad_medida","Unidad"))
                                                 if sel_edit.get("unidad_medida","Unidad") in ["Unidad","Docena","Par","Metro"] else 0)
+                        with ec2:
+                            e_stock = st.number_input("Stock actual", min_value=0,
+                                                        value=int(sel_edit.get("stock_actual", 0)))
+                            e_min = st.number_input("Stock mínimo", min_value=0,
+                                                        value=int(sel_edit.get("stock_minimo", 10)))
+                        with ec3:
+                            e_precio = st.number_input("Precio (S/.)", min_value=0.01,
+                                                        value=float(sel_edit.get("precio_unitario", 25.0)))
+                            costo_actual = float(sel_edit.get("costo_unitario") or 0)
+                            e_costo = st.number_input("Costo unitario (S/.)", min_value=0.0,
+                                                    value=costo_actual, step=0.5,
+                                                    help="Si está en 0, configúralo aquí por primera vez")
+                            if costo_actual <= 0:
+                                st.warning("⚠️ Este producto no tiene costo unitario configurado - el margen bruto saldrá incorrecto hasta que lo definas.")
+                            
                         guardar_edit = st.form_submit_button("💾 Guardar cambios",
-                                                              type="primary", use_container_width=True)
+                                                                type="primary", use_container_width=True)
                     if guardar_edit:
                         ok = api_put_inventario(sel_edit["id_inventario"], {
                             "producto": e_nombre, "categoria": e_cat,
                             "stock_actual": e_stock, "stock_minimo": e_min,
-                            "precio_unitario": e_precio, "unidad_medida": e_um,
+                            "precio_unitario": e_precio, "costo_unitario": e_costo,"unidad_medida": e_um,
                         })
                         if ok:
                             st.success(f"✅ '{e_nombre}' actualizado.")
@@ -2587,7 +2681,7 @@ def page_inventario():
                             })
                             if res["ok"]:
                                 st.success(f"✅ '{n_nombre}' agregado al inventario.")
-                                st.balloons()
+                                
                                 time.sleep(1.5)
                                 st.rerun()
                             else:
@@ -2613,8 +2707,16 @@ def page_inventario():
                                                 type=["csv","xlsx"], key="upload_inv")
                 if archivo_inv:
                     try:
-                        df_inv_csv = pd.read_excel(archivo_inv) if archivo_inv.name.endswith(".xlsx") \
-                                     else pd.read_csv(archivo_inv)
+                        if archivo_inv.name.endswith(".xlsx"):
+                            df_inv_csv = pd.read_excel(archivo_inv)
+                        else:
+                            raw_bytes = archivo_inv.read()
+                            try:
+                                contenido = raw_bytes.decode("utf-8-sig")
+                            except UnicodeDecodeError:
+                                contenido = raw_bytes.decode("latin-1")
+                            import io as _io
+                            df_inv_csv = pd.read_csv(_io.StringIO(contenido), sep=None, engine="python")
                         st.markdown(f'<div class="section-note">Vista previa: '
                                     f'<strong>{len(df_inv_csv):,} productos encontrados</strong></div>',
                                     unsafe_allow_html=True)
@@ -2671,9 +2773,6 @@ def page_inventario():
 
     # PESTAÑA 3: Registrar entrada
     with tabs_obj[2]:
-        if not es_gerente():
-            st.warning("🔒 Solo el Gerente puede registrar entradas de mercadería.")
-        else:
             st.markdown('<div class="section-note">'
                         'Registra cuando llega mercadería nueva. El stock se aumenta y queda registrado.'
                         '</div>', unsafe_allow_html=True)
@@ -2716,7 +2815,6 @@ def page_inventario():
                         )
                     if res_ent["ok"]:
                         st.success(f"✅ Entrada registrada. '{sel_ent['producto']}' ahora tiene **{int(sel_ent['stock_actual']) + int(e_cant)} uds**.")
-                        st.balloons()
                         time.sleep(2)
                         st.rerun()
                     else:
@@ -3955,7 +4053,7 @@ def page_modelo_predictivo():
                     st.session_state["modelo_local_mae"] = mae_local
                     st.session_state["modelo_local_n"]   = len(df_train)
                     st.success(f"✅ Modelo reentrenado con {len(df_train)} registros de tu empresa.")
-                    st.balloons()
+              
                 except Exception as e:
                     st.error(f"❌ Error durante el reentrenamiento: {e}")
 
@@ -4241,7 +4339,7 @@ def page_crear_colaborador():
             })
             if res["ok"]:
                 st.success(f"✅ Colaborador '{usr}' creado.")
-                st.balloons()
+               
             else:
                 st.error(res.get("mensaje", "Error al crear colaborador."))
 
@@ -4408,7 +4506,6 @@ El stock se devuelve al registro del producto, pero como está descontinuado **n
                 st.session_state.consultas_enviadas.append(consulta)
 
                 st.success("✅ Consulta enviada correctamente.")
-                st.balloons()
                 st.info(f"📧 Te responderemos a **{s_correo}** en 24-48 horas hábiles.")
                 with st.expander("📋 Ver resumen de tu consulta"):
                     st.json(consulta)
@@ -4485,7 +4582,8 @@ def page_guia():
     st.markdown("""
 - Ve a **📦 Inventario → 📥 Registrar entrada**
 - Indica producto, cantidad y motivo (compra, producción, devolución, etc.)
-- Queda registrado para auditoría
+- El stock se actualiza automáticamente
+- Queda registrado en el historial de entradas
 """)
 
     paso_header(6, "Consulta al asistente cuando tengas dudas",
